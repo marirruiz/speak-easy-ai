@@ -1,14 +1,16 @@
 import axios from "axios";
 import express from "express";
 import dotenv from "dotenv";
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 
 dotenv.config();
 
 const app = express();
 
-const ai = new GoogleGenAI({
-  apiKey: process.env.GEMINI_API_KEY,
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY as string);
+
+const model = genAI.getGenerativeModel({
+  model: "gemini-1.5-flash",
 });
 
 const userMemory: Record<string, string[]> = {};
@@ -21,11 +23,7 @@ app.get("/", (req, res) => {
 
 app.post("/chat", async (req, res) => {
   try {
-    const {
-      userId = "default_user",
-      message,
-      mode = "conversation",
-    } = req.body;
+    const { userId = "default_user", message, mode = "conversation" } = req.body;
 
     if (!message) {
       return res.status(400).json({ error: "Message é obrigatória" });
@@ -44,21 +42,18 @@ Modo conversa:
 - Faça perguntas simples para manter a conversa.
 - Corrija apenas erros muito importantes.
 `,
-
       correction: `
 Modo correção:
 - Corrija a frase do usuário.
 - Explique o erro em português.
 - Dê uma versão mais natural em inglês.
 `,
-
       vocabulary: `
 Modo vocabulário:
 - Ensine palavras e expressões úteis sobre o tema.
 - Dê tradução em português.
 - Dê exemplos curtos em inglês.
 `,
-
       teacher: `
 Modo professor:
 - Explique gramática ou estrutura em português.
@@ -67,8 +62,7 @@ Modo professor:
 `,
     };
 
-    const selectedMode =
-      modeInstructions[mode] || modeInstructions.conversation;
+    const selectedMode = modeInstructions[mode] || modeInstructions.conversation;
 
     chatHistory.push(`Usuário: ${message}`);
 
@@ -89,12 +83,8 @@ Histórico da conversa:
 ${chatHistory.join("\n")}
 `;
 
-    const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
-      contents: prompt,
-    });
-
-    const reply = response.text || "";
+    const result = await model.generateContent(prompt);
+    const reply = result.response.text() || "";
 
     chatHistory.push(`Speak Easy AI: ${reply}`);
 
@@ -142,19 +132,33 @@ app.post("/webhook", async (req, res) => {
       return res.sendStatus(200);
     }
 
-    const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
-      contents: `
+    if (!userMemory[from]) {
+      userMemory[from] = [];
+    }
+
+    const chatHistory = userMemory[from];
+
+    chatHistory.push(`Usuário: ${text}`);
+
+    const prompt = `
 Você é o Speak Easy AI, um assistente amigável para ajudar pessoas brasileiras a praticarem inglês.
 
-Responda de forma curta, natural e didática.
+Regras:
+- Responda de forma curta, natural e didática.
+- Quando o usuário escrever em português, explique em português.
+- Quando o usuário escrever em inglês, converse em inglês.
+- Corrija erros de inglês de forma gentil.
+- Faça uma pergunta no final para continuar a prática.
+- Não diga que você é um modelo do Google.
 
-Mensagem do usuário:
-${text}
-      `,
-    });
+Histórico da conversa:
+${chatHistory.join("\n")}
+`;
 
-    const reply = response.text || "Desculpa, não consegui responder agora.";
+    const result = await model.generateContent(prompt);
+    const reply = result.response.text() || "Desculpa, não consegui responder agora.";
+
+    chatHistory.push(`Speak Easy AI: ${reply}`);
 
     await axios.post(
       `https://graph.facebook.com/v22.0/${process.env.WHATSAPP_PHONE_NUMBER_ID}/messages`,
