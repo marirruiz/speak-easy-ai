@@ -173,7 +173,11 @@ ${chatHistory.join("\n")}
 
     res.sendStatus(200);
   } catch (error) {
-    console.error("Erro no webhook:", error);
+    if (axios.isAxiosError(error)) {
+      console.error("Erro no webhook:", JSON.stringify(error.response?.data, null, 2));
+    } else {
+      console.error("Erro no webhook:", error);
+    }
     res.sendStatus(500);
   }
 });
