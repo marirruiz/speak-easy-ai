@@ -1,6 +1,7 @@
 import axios from "axios";
 import express from "express";
 import dotenv from "dotenv";
+import { askAI } from "./services/ai";
 
 dotenv.config();
 
@@ -9,29 +10,6 @@ const app = express();
 const userMemory: Record<string, string[]> = {};
 
 app.use(express.json());
-
-async function askGemini(prompt: string): Promise<string> {
-  const response = await axios.post(
-    "https://generativelanguage.googleapis.com/v1beta/interactions",
-    {
-      model: "gemini-2.5-flash",
-      input: prompt,
-    },
-    {
-      headers: {
-        "x-goog-api-key": process.env.GEMINI_API_KEY as string,
-        "Content-Type": "application/json",
-      },
-    }
-  );
-
-  return (
-    response.data.output_text ||
-    response.data.output?.[0]?.text ||
-    response.data.candidates?.[0]?.content?.parts?.[0]?.text ||
-    ""
-  );
-}
 
 app.get("/", (req, res) => {
   res.send("Speak Easy AI rodando 🚀");
@@ -99,7 +77,7 @@ Histórico da conversa:
 ${chatHistory.join("\n")}
 `;
 
-    const reply = await askGemini(prompt);
+    const reply = await askAI(prompt);
 
     chatHistory.push(`Speak Easy AI: ${reply}`);
 
@@ -171,7 +149,7 @@ ${chatHistory.join("\n")}
 `;
 
     const reply =
-      (await askGemini(prompt)) || "Desculpa, não consegui responder agora.";
+      (await askAI(prompt)) || "Desculpa, não consegui responder agora.";
 
     chatHistory.push(`Speak Easy AI: ${reply}`);
 
