@@ -1,21 +1,37 @@
 import axios from "axios";
 import express from "express";
 import dotenv from "dotenv";
-import { GoogleGenerativeAI } from "@google/generative-ai";
 
 dotenv.config();
 
 const app = express();
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY as string);
-
-const model = genAI.getGenerativeModel({
-  model: "gemini-1.5-flash",
-});
-
 const userMemory: Record<string, string[]> = {};
 
 app.use(express.json());
+
+async function askGemini(prompt: string): Promise<string> {
+  const response = await axios.post(
+    "https://generativelanguage.googleapis.com/v1beta/interactions",
+    {
+      model: "gemini-2.5-flash",
+      input: prompt,
+    },
+    {
+      headers: {
+        "x-goog-api-key": process.env.GEMINI_API_KEY as string,
+        "Content-Type": "application/json",
+      },
+    }
+  );
+
+  return (
+    response.data.output_text ||
+    response.data.output?.[0]?.text ||
+    response.data.candidates?.[0]?.content?.parts?.[0]?.text ||
+    ""
+  );
+}
 
 app.get("/", (req, res) => {
   res.send("Speak Easy AI rodando 🚀");
@@ -83,8 +99,7 @@ Histórico da conversa:
 ${chatHistory.join("\n")}
 `;
 
-    const result = await model.generateContent(prompt);
-    const reply = result.response.text() || "";
+    const reply = await askGemini(prompt);
 
     chatHistory.push(`Speak Easy AI: ${reply}`);
 
@@ -94,7 +109,7 @@ ${chatHistory.join("\n")}
       reply,
     });
   } catch (error) {
-    console.error(error);
+    console.error("Erro no /chat:", error);
     res.status(500).json({ error: "Erro ao processar mensagem" });
   }
 });
@@ -155,8 +170,8 @@ Histórico da conversa:
 ${chatHistory.join("\n")}
 `;
 
-    const result = await model.generateContent(prompt);
-    const reply = result.response.text() || "Desculpa, não consegui responder agora.";
+    const reply =
+      (await askGemini(prompt)) || "Desculpa, não consegui responder agora.";
 
     chatHistory.push(`Speak Easy AI: ${reply}`);
 
