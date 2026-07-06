@@ -121,6 +121,9 @@ app.post("/webhook", async (req, res) => {
     const from = message.from;
     const text = message.text?.body;
 
+    console.log("WHATSAPP FROM:", from);
+    console.log("WHATSAPP TEXT:", text);
+
     if (!text) {
       return res.sendStatus(200);
     }
